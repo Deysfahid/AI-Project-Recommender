@@ -4,14 +4,7 @@ __pycache__/
 
 # Virtual environments
 venv/
-.venv/
-
-# Environment files
-.env
-
-# IDE files
-.vscode/
-
+.venv/giv
 # OS files
 .DS_Store
 Thumbs.db
