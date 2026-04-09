@@ -2,6 +2,8 @@
 
 A beginner-friendly Streamlit app that helps students discover project ideas from real arXiv research papers.
 
+🚀 **Live Demo:** https://ai-project-recommender-at7yamswp2yjtvmkuwnszb.streamlit.app/
+
 ## Features
 
 - Fetches live papers from arXiv by domain
