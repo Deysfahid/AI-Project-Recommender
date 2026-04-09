@@ -3,7 +3,7 @@ import streamlit as st
 
 from src.api import fetch_papers
 from src import helpers as helper_utils
-from src.recommender import get_top_papers, get_trending_keywords, rerank_papers_by_skill_level
+from src import recommender as recommender_utils
 
 
 # Keep deployment robust if cloud temporarily runs mixed file versions.
@@ -15,6 +15,17 @@ build_why_explanation = getattr(
     lambda domain, skill_level, paper_summary, relevance_pct: (
         f"This project aligns with {domain} for {skill_level}. Relevance score: {relevance_pct}%."
     ),
+)
+get_top_papers = recommender_utils.get_top_papers
+get_trending_keywords = recommender_utils.get_trending_keywords
+rerank_papers_by_skill_level = getattr(
+    recommender_utils,
+    "rerank_papers_by_skill_level",
+    lambda papers, skill_level, top_n=10: sorted(
+        papers,
+        key=lambda x: float(x.get("score", 0.0)),
+        reverse=True,
+    )[:top_n],
 )
 
 st.set_page_config(page_title="AI Project Recommender", layout="wide")
