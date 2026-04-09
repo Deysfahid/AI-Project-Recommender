@@ -2,8 +2,20 @@ import pandas as pd
 import streamlit as st
 
 from src.api import fetch_papers
-from src.helpers import build_why_explanation, make_project_idea, normalize_difficulty
+from src import helpers as helper_utils
 from src.recommender import get_top_papers, get_trending_keywords, rerank_papers_by_skill_level
+
+
+# Keep deployment robust if cloud temporarily runs mixed file versions.
+make_project_idea = helper_utils.make_project_idea
+normalize_difficulty = getattr(helper_utils, "normalize_difficulty", lambda value: str(value or "Beginner"))
+build_why_explanation = getattr(
+    helper_utils,
+    "build_why_explanation",
+    lambda domain, skill_level, paper_summary, relevance_pct: (
+        f"This project aligns with {domain} for {skill_level}. Relevance score: {relevance_pct}%."
+    ),
+)
 
 st.set_page_config(page_title="AI Project Recommender", layout="wide")
 
