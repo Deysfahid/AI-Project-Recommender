@@ -4,9 +4,92 @@ import streamlit as st
 from sklearn.metrics.pairwise import cosine_similarity
 
 
+DOMAIN_KEYWORDS = {
+    "artificial intelligence": ["ai", "artificial intelligence", "machine learning", "deep learning"],
+    "machine learning": ["machine learning", "ml", "deep learning", "neural"],
+    "computer vision": ["computer vision", "image", "vision", "object detection", "segmentation"],
+    "nlp": ["nlp", "language model", "text", "transformer", "token"],
+    "web development": ["web", "frontend", "backend", "full stack", "api"],
+    "cybersecurity": ["security", "encryption", "malware", "threat", "vulnerability"],
+    "data science": ["data science", "analytics", "prediction", "dataset", "statistics"],
+}
+
+LANGUAGE_KEYWORDS = {
+    "python": ["python", "pytorch", "tensorflow", "numpy", "pandas"],
+    "javascript": ["javascript", "node", "react", "frontend", "browser"],
+    "java": ["java", "spring", "backend", "jvm"],
+    "c++": ["c++", "cpp", "performance", "embedded"],
+    "go": ["go", "golang", "microservice", "concurrency"],
+    "rust": ["rust", "memory safety", "systems"],
+}
+
+PROJECT_TYPE_KEYWORDS = {
+    "web app": ["web", "frontend", "backend", "full stack"],
+    "notebook prototype": ["notebook", "prototype", "experiment"],
+    "cli tool": ["command", "cli", "terminal", "tool"],
+    "data pipeline": ["pipeline", "etl", "workflow", "data processing"],
+    "api service": ["api", "service", "endpoint", "backend"],
+}
+
+
 # This function keeps a score value inside the 0.0 to 1.0 range.
 def _clamp_score(value):
     return max(0.0, min(1.0, float(value)))
+
+
+# This function returns domain/language/type keywords for filtering and boosting.
+def _keywords_for_context(domain, language, project_type):
+    domain_terms = DOMAIN_KEYWORDS.get((domain or "").lower(), [])
+    language_terms = LANGUAGE_KEYWORDS.get((language or "").lower(), [])
+    type_terms = PROJECT_TYPE_KEYWORDS.get((project_type or "").lower(), [])
+    return domain_terms, language_terms, type_terms
+
+
+# This function filters and boosts papers using selected domain/language/project-type context.
+def apply_context_filters(papers, domain, language, project_type, min_results=10):
+    if not papers:
+        return []
+
+    domain_terms, language_terms, type_terms = _keywords_for_context(domain, language, project_type)
+
+    rescored = []
+    for paper in papers:
+        text = f"{paper.get('title', '')} {paper.get('summary', '')}".lower()
+        domain_hit = any(term in text for term in domain_terms) if domain_terms else False
+        language_hit = any(term in text for term in language_terms) if language_terms else False
+        type_hit = any(term in text for term in type_terms) if type_terms else False
+
+        boost = 0.0
+        if domain_hit:
+            boost += 0.12
+        if language_hit:
+            boost += 0.08
+        if type_hit:
+            boost += 0.06
+
+        paper_copy = dict(paper)
+        paper_copy["score"] = _clamp_score(paper.get("score", 0.0) + boost)
+        paper_copy["context_hits"] = {
+            "domain": domain_hit,
+            "language": language_hit,
+            "project_type": type_hit,
+        }
+        rescored.append(paper_copy)
+
+    strict = [
+        p for p in rescored
+        if p.get("context_hits", {}).get("domain") and (
+            p.get("context_hits", {}).get("language") or p.get("context_hits", {}).get("project_type")
+        )
+    ]
+
+    if len(strict) >= min_results:
+        base = strict
+    else:
+        domain_only = [p for p in rescored if p.get("context_hits", {}).get("domain")]
+        base = domain_only if len(domain_only) >= min_results else rescored
+
+    return sorted(base, key=lambda x: x.get("score", 0.0), reverse=True)
 
 
 # This function returns level-specific keywords used to diversify project results.
@@ -71,6 +154,57 @@ def rerank_papers_by_skill_level(papers, skill_level, top_n=10):
     return sorted(rescored, key=lambda x: x.get("score", 0.0), reverse=True)[:top_n]
 
 
+# This function reranks papers by semester maturity so project complexity grows over time.
+def rerank_papers_by_semester(papers, semester, top_n=10):
+    if not papers:
+        return []
+
+    sem = int(semester)
+    if sem <= 2:
+        keywords = {
+            "tutorial": 1.0,
+            "survey": 0.9,
+            "introduction": 0.9,
+            "simple": 0.8,
+            "application": 0.6,
+        }
+    elif sem <= 5:
+        keywords = {
+            "implementation": 1.0,
+            "evaluation": 0.9,
+            "framework": 0.8,
+            "pipeline": 0.8,
+            "practical": 0.7,
+        }
+    else:
+        keywords = {
+            "optimization": 1.0,
+            "benchmark": 0.9,
+            "state-of-the-art": 0.9,
+            "novel": 0.9,
+            "robust": 0.7,
+            "multimodal": 0.7,
+        }
+
+    rescored = []
+    for paper in papers:
+        text = f"{paper.get('title', '')} {paper.get('summary', '')}".lower()
+        semester_bonus = 0.0
+        for word, weight in keywords.items():
+            if word in text:
+                semester_bonus += weight
+
+        normalized_bonus = _clamp_score(semester_bonus / 3.0)
+        base_score = _clamp_score(paper.get("score", 0.0))
+        combined_score = (0.75 * base_score) + (0.25 * normalized_bonus)
+
+        paper_copy = dict(paper)
+        paper_copy["score"] = _clamp_score(combined_score)
+        rescored.append(paper_copy)
+
+    return sorted(rescored, key=lambda x: x.get("score", 0.0), reverse=True)[:top_n]
+
+
 # This function loads and caches the embedding model so it is reused across reruns.
 @st.cache_resource
 def load_embedding_model():
@@ -120,6 +254,11 @@ def get_top_papers(papers, user_query, top_n=5):
         paper_copy["score"] = _clamp_score((float(score) + 1.0) / 2.0)
         top_papers.append(paper_copy)
     return top_papers
+
+
+# This function provides a semantic-search API used by the app pipeline.
+def semantic_search(papers, user_query, top_n=10):
+    return get_top_papers(papers, user_query, top_n=top_n)
 
 
 # This function extracts simple trending keywords from paper titles.

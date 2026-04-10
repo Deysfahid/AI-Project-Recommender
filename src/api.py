@@ -8,12 +8,12 @@ import streamlit as st
 
 # This function fetches recent papers from arXiv for a chosen topic.
 @st.cache_data(ttl=3600)
-def fetch_papers(domain):
+def fetch_papers(domain, max_results=30):
     try:
         safe_domain = urllib.parse.quote_plus(domain)
         url = (
             "https://export.arxiv.org/api/query?"
-            f"search_query=all:{safe_domain}&max_results=20"
+            f"search_query=all:{safe_domain}&max_results={int(max_results)}"
         )
 
         # Try normal HTTPS first.
