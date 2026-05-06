@@ -298,17 +298,24 @@ def run_filter_mode(domain, skill_level, language, project_type, project_goal, s
 # This function runs smart-search mode independently of sidebar filters.
 def run_search_mode(search_query, project_count, paper_count):
     query_text = (search_query or "").strip()
+    last_query = st.session_state.get("last_search_query", "")
     st.session_state["last_search_query"] = query_text
 
     if not query_text:
         st.warning("Please enter a search query before clicking Search Projects.")
         return
 
+    if query_text == last_query and st.session_state.get("search_results"):
+        st.session_state["mode"] = "search"
+        st.session_state["active_mode"] = "search"
+        return
+
     parsed_tags = parse_query(query_text)
     st.session_state["parsed_tags"] = parsed_tags
 
-    # Always fetch fresh in search mode, independent from cached filter results.
-    fetch_papers.clear()
+    # Refresh cache only when the query changes to avoid slow re-fetches.
+    if query_text != last_query:
+        fetch_papers.clear()
     papers = fetch_papers(query_text, max_results=40)
 
     # Fallback: expand into multiple search terms for user-friendly but non-academic queries.
@@ -482,7 +489,7 @@ with st.sidebar:
             "Industry-style solution",
         ],
     )
-    semester = st.slider("Semester", min_value=1, max_value=8, value=4)
+    semester = st.slider("Semester", min_value=1, max_value=6, value=4)
     project_count = st.slider("How many project ideas", min_value=6, max_value=15, value=10)
     paper_count = st.slider("How many research papers", min_value=10, max_value=30, value=20)
 

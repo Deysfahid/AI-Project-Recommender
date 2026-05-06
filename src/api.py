@@ -16,14 +16,15 @@ def fetch_papers(domain, max_results=30):
             f"search_query=all:{safe_domain}&max_results={int(max_results)}"
         )
 
-        # Try normal HTTPS first.
-        feed = feedparser.parse(url)
+        # arXiv increasingly expects a User-Agent; use explicit request first.
+        request = urllib.request.Request(url, headers={"User-Agent": "ai-recommender/1.0"})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            feed = feedparser.parse(response.read())
 
-        # Some local environments fail SSL verification; fallback to unverified context.
+        # Some environments fail SSL verification; fallback to unverified context.
         if len(feed.entries) == 0 and getattr(feed, "bozo", False):
             error_text = str(getattr(feed, "bozo_exception", ""))
             if "CERTIFICATE_VERIFY_FAILED" in error_text:
-                request = urllib.request.Request(url, headers={"User-Agent": "ai-recommender/1.0"})
                 context = ssl._create_unverified_context()
                 with urllib.request.urlopen(request, context=context, timeout=20) as response:
                     feed = feedparser.parse(response.read())
